@@ -1,0 +1,305 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans)}
+.wrap{padding:16px 0;display:flex;flex-direction:column;gap:24px}
+.phase{border:0.5px solid var(--color-border-secondary);border-radius:12px;overflow:hidden}
+.phase-header{padding:10px 16px;display:flex;align-items:center;gap:10px}
+.phase-num{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;flex-shrink:0}
+.phase-title{font-size:15px;font-weight:500;color:var(--color-text-primary)}
+.phase-sub{font-size:12px;color:var(--color-text-secondary);margin-left:auto}
+.steps{display:flex;flex-direction:column}
+.step{padding:10px 16px;border-top:0.5px solid var(--color-border-tertiary);display:grid;grid-template-columns:22px 1fr;gap:10px;align-items:start}
+.step-n{font-size:12px;font-weight:500;color:var(--color-text-tertiary);padding-top:1px}
+.step-body{}
+.step-title{font-size:13px;font-weight:500;color:var(--color-text-primary);margin-bottom:3px}
+.step-desc{font-size:12px;color:var(--color-text-secondary);line-height:1.55}
+.code{font-family:var(--font-mono);font-size:11px;background:var(--color-background-tertiary);border:0.5px solid var(--color-border-tertiary);border-radius:5px;padding:2px 6px;color:var(--color-text-primary);display:inline}
+.tag{font-size:10px;font-weight:500;padding:2px 7px;border-radius:10px;display:inline-block;margin-top:4px}
+.tag-api{background:var(--color-background-info);color:var(--color-text-info)}
+.tag-concept{background:var(--color-background-warning);color:var(--color-text-warning)}
+.tag-pitfall{background:var(--color-background-danger);color:var(--color-text-danger)}
+.tag-interview{background:var(--color-background-success);color:var(--color-text-success)}
+.divider-label{padding:6px 16px;font-size:11px;font-weight:500;color:var(--color-text-tertiary);background:var(--color-background-tertiary);border-top:0.5px solid var(--color-border-tertiary);letter-spacing:0.04em}
+
+/* phase colors via inline bg on header */
+.ph1 .phase-header{background:var(--color-background-info)}
+.ph1 .phase-num{background:#378ADD;color:#fff}
+.ph2 .phase-header{background:var(--color-background-warning)}
+.ph2 .phase-num{background:#BA7517;color:#fff}
+.ph3 .phase-header{background:var(--color-background-success)}
+.ph3 .phase-num{background:#3B6D11;color:#fff}
+.ph4 .phase-header{background:var(--color-background-danger)}
+.ph4 .phase-num{background:#A32D2D;color:#fff}
+.ph5 .phase-header{background:var(--color-background-tertiary)}
+.ph5 .phase-num{background:#5F5E5A;color:#fff}
+
+.concept-box{margin:12px 16px;padding:10px 14px;border-radius:8px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-secondary)}
+.concept-box .label{font-size:11px;font-weight:500;color:var(--color-text-tertiary);margin-bottom:6px;letter-spacing:0.04em}
+.concept-box .row{display:flex;gap:8px;align-items:flex-start;margin-bottom:4px}
+.concept-box .arrow{color:var(--color-text-tertiary);font-size:12px;padding-top:1px}
+.concept-box .text{font-size:12px;color:var(--color-text-secondary);line-height:1.5}
+.concept-box .bold{font-weight:500;color:var(--color-text-primary)}
+</style>
+
+<div class="wrap">
+
+  <!-- THE BIG PICTURE -->
+  <div class="concept-box">
+    <div class="label">THE ONE MENTAL MODEL — USER SPACE vs KERNEL SPACE</div>
+    <div class="row"><div class="arrow">›</div><div class="text"><span class="bold">User space</span> calls <span class="code">open/read/write/lseek/close</span> — these are C library wrappers around CPU instructions that trigger a <span class="bold">software interrupt</span> (syscall). The CPU switches privilege level and jumps into kernel mode.</div></div>
+    <div class="row"><div class="arrow">›</div><div class="text"><span class="bold">VFS</span> (Virtual File System) is the kernel's switchboard. It looks up the <span class="code">file_operations</span> struct registered for this device and calls the matching function pointer.</div></div>
+    <div class="row"><div class="arrow">›</div><div class="text"><span class="bold">Your driver</span> is just a set of C functions registered into that struct. The kernel calls them — you never call them yourself.</div></div>
+    <div class="row"><div class="arrow">›</div><div class="text"><span class="bold">Crossing the boundary</span>: user pointers cannot be dereferenced in kernel space — use <span class="code">copy_to_user</span> / <span class="code">copy_from_user</span>. This is a favourite interview question.</div></div>
+  </div>
+
+  <!-- PHASE 1 -->
+  <div class="phase ph1">
+    <div class="phase-header">
+      <div class="phase-num">1</div>
+      <div class="phase-title">Define your data structures first</div>
+      <div class="phase-sub">before any code</div>
+    </div>
+    <div class="steps">
+      <div class="divider-label">THINK: what does each device need to know about itself?</div>
+      <div class="step">
+        <div class="step-n">1.1</div>
+        <div class="step-body">
+          <div class="step-title">Per-device struct — <span class="code">pcdev_private_data</span></div>
+          <div class="step-desc">Holds everything one device instance needs: <span class="code">char *buffer</span>, <span class="code">unsigned size</span>, <span class="code">serial_number</span>, <span class="code">perm</span>, and crucially an embedded <span class="code">struct cdev</span>. The embedded cdev is how you later recover this struct using <span class="code">container_of</span> in <span class="code">pcd_open</span>.</div>
+          <span class="tag tag-interview">interview: why embed cdev inside private_data?</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">1.2</div>
+        <div class="step-body">
+          <div class="step-title">Driver-wide struct — <span class="code">pcdrv_private_data</span></div>
+          <div class="step-desc">Holds the base <span class="code">dev_t device_number</span>, a pointer to <span class="code">struct class</span>, pointer to <span class="code">struct device</span>, and an array of all per-device structs. One global instance of this — the driver's single source of truth.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">1.3</div>
+        <div class="step-body">
+          <div class="step-title">Define permissions as readable constants</div>
+          <div class="step-desc">Use <span class="code">#define RDONLY 0x01</span>, <span class="code">WRONLY 0x10</span>, <span class="code">RDWR 0x11</span>. These bitmasks map neatly: reading checks bit 0, writing checks bit 4. Interviewers will ask you to explain why these values were chosen.</div>
+          <span class="tag tag-concept">concept: bitmask permission design</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE 2 -->
+  <div class="phase ph2">
+    <div class="phase-header">
+      <div class="phase-num">2</div>
+      <div class="phase-title">Module init — register everything with the kernel</div>
+      <div class="phase-sub">the 4-step init sequence</div>
+    </div>
+    <div class="steps">
+      <div class="divider-label">REMEMBER THIS ORDER — cleanup reverses it exactly</div>
+      <div class="step">
+        <div class="step-n">2.1</div>
+        <div class="step-body">
+          <div class="step-title">Allocate device numbers — <span class="code">alloc_chrdev_region()</span></div>
+          <div class="step-desc">Ask the kernel for N consecutive minor numbers. It picks an available major and gives you back a <span class="code">dev_t</span> base. Never hardcode a major number — that's a legacy practice.</div>
+          <span class="tag tag-api">API: alloc_chrdev_region(&amp;dev_num, 0, N, "name")</span>
+          <span class="tag tag-pitfall">pitfall: check return value — negative = failure</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">2.2</div>
+        <div class="step-body">
+          <div class="step-title">Create a device class — <span class="code">class_create()</span></div>
+          <div class="step-desc">Creates an entry under <span class="code">/sys/class/</span>. This is needed so <span class="code">device_create</span> can later auto-create <span class="code">/dev</span> nodes via udev. Returns a pointer — check with <span class="code">IS_ERR()</span>, not NULL check.</div>
+          <span class="tag tag-api">API: class_create("pcd_class")</span>
+          <span class="tag tag-pitfall">pitfall: use IS_ERR() not == NULL for pointer errors</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">2.3</div>
+        <div class="step-body">
+          <div class="step-title">For each device — <span class="code">cdev_init</span> + <span class="code">cdev_add</span></div>
+          <div class="step-desc"><span class="code">cdev_init</span> binds your <span class="code">file_operations</span> struct to the cdev. <span class="code">cdev_add</span> makes it live — from this moment, the kernel can dispatch syscalls to your driver. Do this inside a loop over all N devices.</div>
+          <span class="tag tag-api">API: cdev_init(&amp;cdev, &amp;fops)  →  cdev_add(&amp;cdev, dev_num+i, 1)</span>
+          <span class="tag tag-interview">interview: what happens between cdev_init and cdev_add?</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">2.4</div>
+        <div class="step-body">
+          <div class="step-title">For each device — <span class="code">device_create()</span></div>
+          <div class="step-desc">Populates <span class="code">/sys/class/pcd_class/pcdev-N</span> and triggers udev to create <span class="code">/dev/pcdev-N</span> automatically. Without this, no <span class="code">/dev</span> node appears and the user cannot open the device.</div>
+          <span class="tag tag-api">API: device_create(class, NULL, dev_num+i, NULL, "pcdev-%d", i+1)</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">2.5</div>
+        <div class="step-body">
+          <div class="step-title">Error handling with goto labels</div>
+          <div class="step-desc">On any failure, jump to a cleanup label that undoes only the steps completed so far. This is the standard kernel pattern — <span class="code">goto unregister_chrdev</span>, <span class="code">goto cdev_del</span>, etc. Interviewers love this: it's resource-safe and avoids nested ifs.</div>
+          <span class="tag tag-interview">interview: why goto in kernel code is acceptable and preferred</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE 3 -->
+  <div class="phase ph3">
+    <div class="phase-header">
+      <div class="phase-num">3</div>
+      <div class="phase-title">Implement file operations — the 5 driver functions</div>
+      <div class="phase-sub">what VFS calls on each syscall</div>
+    </div>
+    <div class="steps">
+      <div class="divider-label">REMEMBER: parameters come from VFS — you never call these directly</div>
+      <div class="step">
+        <div class="step-n">3.1</div>
+        <div class="step-body">
+          <div class="step-title"><span class="code">pcd_open</span> — the gatekeeper</div>
+          <div class="step-desc">
+            Three jobs in order:<br>
+            a) Get minor number from <span class="code">inode->i_rdev</span> using <span class="code">MINOR()</span><br>
+            b) Recover per-device struct using <span class="code">container_of(inode->i_cdev, struct pcdev_private_data, cdev)</span><br>
+            c) Save it to <span class="code">filp->private_data</span> so read/write/lseek can find it<br>
+            d) Call <span class="code">check_permission()</span> — reject if mode mismatch
+          </div>
+          <span class="tag tag-concept">concept: container_of is the key to per-device data</span>
+          <span class="tag tag-pitfall">pitfall: your code returns 0 even on permission failure — must return ret</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">3.2</div>
+        <div class="step-body">
+          <div class="step-title"><span class="code">pcd_read</span> — copy kernel buffer → user</div>
+          <div class="step-desc">
+            a) Get max_size from <span class="code">filp->private_data</span><br>
+            b) Clamp count: if <span class="code">f_pos + count > max_size</span>, reduce count<br>
+            c) <span class="code">copy_to_user(buff, device_buf + f_pos, count)</span><br>
+            d) Advance <span class="code">*f_pos += count</span><br>
+            e) Return bytes read (0 = EOF signal to user)
+          </div>
+          <span class="tag tag-interview">interview: why can't you use memcpy instead of copy_to_user?</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">3.3</div>
+        <div class="step-body">
+          <div class="step-title"><span class="code">pcd_write</span> — copy user → kernel buffer</div>
+          <div class="step-desc">
+            a) Clamp count to remaining space<br>
+            b) If count == 0 after clamping, return <span class="code">-ENOMEM</span> (buffer full)<br>
+            c) <span class="code">copy_from_user(device_buf + f_pos, buff, count)</span><br>
+            d) Advance <span class="code">*f_pos += count</span><br>
+            e) Return bytes written
+          </div>
+          <span class="tag tag-pitfall">pitfall: -ENOMEM is wrong here — -ENOSPC is more accurate, but -ENOMEM is common in examples</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">3.4</div>
+        <div class="step-body">
+          <div class="step-title"><span class="code">pcd_lseek</span> — reposition the cursor</div>
+          <div class="step-desc">
+            Handle 3 cases: <span class="code">SEEK_SET</span> (absolute), <span class="code">SEEK_CUR</span> (relative to current), <span class="code">SEEK_END</span> (relative to end). For each: compute new position, validate it is within [0, max_size], update <span class="code">filp->f_pos</span>, return new position.
+          </div>
+          <span class="tag tag-interview">interview: what does lseek return on success? (new absolute offset)</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">3.5</div>
+        <div class="step-body">
+          <div class="step-title"><span class="code">pcd_release</span> — called on close()</div>
+          <div class="step-desc">Called when the last fd referencing this open file is closed. In this driver — nothing to do: no dynamic allocations were made in open, no hardware to release. Just log and return 0. In real drivers this is where you free resources.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE 4 -->
+  <div class="phase ph4">
+    <div class="phase-header">
+      <div class="phase-num">4</div>
+      <div class="phase-title">Module exit — undo everything in reverse order</div>
+      <div class="phase-sub">mirror image of init</div>
+    </div>
+    <div class="steps">
+      <div class="divider-label">RULE: last thing created must be first thing destroyed</div>
+      <div class="step">
+        <div class="step-n">4.1</div>
+        <div class="step-body">
+          <div class="step-title">Loop: <span class="code">device_destroy</span> + <span class="code">cdev_del</span> for each device</div>
+          <div class="step-desc">Removes <span class="code">/dev/pcdev-N</span> and the sysfs entry, then unregisters the cdev from VFS. After <span class="code">cdev_del</span>, no new syscalls will reach your driver.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">4.2</div>
+        <div class="step-body">
+          <div class="step-title"><span class="code">class_destroy</span> → <span class="code">unregister_chrdev_region</span></div>
+          <div class="step-desc">Remove the class from sysfs, then release the device numbers back to the kernel pool. This order matters: destroying the class first ensures no device nodes try to reference it during teardown.</div>
+          <span class="tag tag-interview">interview: what happens if you skip unregister_chrdev_region?</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE 5: Interview flashcards -->
+  <div class="phase ph5">
+    <div class="phase-header">
+      <div class="phase-num">5</div>
+      <div class="phase-title">Interview flashpoints — questions you will be asked</div>
+      <div class="phase-sub">memorise these answers</div>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-n">Q1</div>
+        <div class="step-body">
+          <div class="step-title">What is the difference between a major and minor number?</div>
+          <div class="step-desc">Major identifies the driver. Minor identifies a specific device managed by that driver. Your 4 pcdevs share one major but have minors 0–3.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">Q2</div>
+        <div class="step-body">
+          <div class="step-title">Why can't you use memcpy to transfer data between user and kernel?</div>
+          <div class="step-desc">User-space pointers may be invalid, swapped out, or malicious. <span class="code">copy_to_user</span> / <span class="code">copy_from_user</span> perform access validation and handle page faults safely. Direct dereference of a __user pointer can panic the kernel.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">Q3</div>
+        <div class="step-body">
+          <div class="step-title">What is container_of and why is it used here?</div>
+          <div class="step-desc">A macro that computes the address of a parent struct given a pointer to one of its members. In <span class="code">pcd_open</span>, VFS gives you <span class="code">inode->i_cdev</span>. Since <span class="code">cdev</span> is embedded inside <span class="code">pcdev_private_data</span>, <span class="code">container_of</span> lets you recover the whole private struct from just that pointer.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">Q4</div>
+        <div class="step-body">
+          <div class="step-title">What is the role of filp->private_data?</div>
+          <div class="step-desc">A void pointer in <span class="code">struct file</span> that is yours to use. Set it in <span class="code">pcd_open</span> to the per-device struct. All subsequent calls (read/write/lseek) receive the same <span class="code">filp</span>, so they cast <span class="code">private_data</span> to get device-specific buffer, size, and permissions — without needing the inode again.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">Q5</div>
+        <div class="step-body">
+          <div class="step-title">What is the difference between cdev_init and cdev_add?</div>
+          <div class="step-desc"><span class="code">cdev_init</span> sets up the cdev struct in memory (links it to file_operations). <span class="code">cdev_add</span> registers it with the kernel's character device database — making it live. A device is not accessible until <span class="code">cdev_add</span> returns successfully.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">Q6</div>
+        <div class="step-body">
+          <div class="step-title">What is the role of VFS in a character driver?</div>
+          <div class="step-desc">VFS is the kernel abstraction that makes every file, socket, pipe, and device look the same to user space. When a process calls <span class="code">read()</span>, VFS looks up the <span class="code">file_operations</span> for that fd and dispatches to the driver's <span class="code">.read</span> function pointer. Your driver never cares what syscall ABI the architecture uses.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-n">Q7</div>
+        <div class="step-body">
+          <div class="step-title">Why is goto used in kernel init functions?</div>
+          <div class="step-desc">Kernel code cannot use C++ exceptions or RAII. goto to cleanup labels is the accepted pattern for unwinding partial initialisation — it's readable, flat, and guarantees each resource is freed exactly once in the right order. It is explicitly recommended in the Linux kernel coding style guide.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
